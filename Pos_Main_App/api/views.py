@@ -206,3 +206,4 @@ class ContactSupportView(APIView):
                 {"error": "An internal server error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+    
