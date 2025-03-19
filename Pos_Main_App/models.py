@@ -132,15 +132,20 @@ class Bill_model(models.Model):
 
 
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+import requests
+from django.conf import settings
 
 class ContactSupport(models.Model):
-    full_name = models.CharField(max_length=255)  # Check the actual field name
-    email = models.EmailField()
-    user_message = models.TextField()  # Check if this is the correct field
+    full_name = models.CharField(max_length=255)  # Ensuring valid name field
+    email = models.EmailField(unique=True)  # Ensuring unique email
+    phone_number = models.CharField(max_length=15,default="")  # New phone number field
+    user_message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.full_name  # Ensure a meaningful string representation
+        return self.full_name  # Returns a meaningful representation
 
 # Signal to send Slack message
 @receiver(post_save, sender=ContactSupport)
@@ -150,6 +155,7 @@ def send_slack_notification(sender, instance, created, **kwargs):
             f"🎉 *New Contact Request!*\n"
             f"👤 *Name:* {instance.full_name}\n"
             f"📧 *Email:* {instance.email}\n"
+            f"📞 *Phone:* {instance.phone_number}\n"
             f"📝 *Message:* {instance.user_message}"
         )
         payload = {"text": message}

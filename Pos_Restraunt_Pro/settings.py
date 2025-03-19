@@ -32,7 +32,7 @@ ALLOWED_HOSTS = ['*',"http://3.108.54.86",'localhost',"http://3.108.185.44:5173/
 # settings.py
 import os
 
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 
 
 INSTALLED_APPS = [
