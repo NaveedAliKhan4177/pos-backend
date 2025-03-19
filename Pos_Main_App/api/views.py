@@ -16,7 +16,12 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.response import Response
 import traceback
-from .utils import send_slack_notification 
+import logging
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from Pos_Main_App.api.utils import send_slack_error_message  # Import Slack error handler
+
 
 def health_check(request):
     return JsonResponse({"status": "OK"})
@@ -178,32 +183,27 @@ def test_slack_error(request):
 
 
 
-
-@method_decorator(csrf_exempt, name='dispatch')
 class ContactSupportView(APIView):
-    def get(self, request, *args, **kwargs):
-        """Retrieve all contact support messages."""
-        contacts = ContactSupport.objects.all()
-        serializer = ContactSupportSerializer(contacts, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
     def post(self, request, *args, **kwargs):
-        """Submit a contact support request."""
         try:
             serializer = ContactSupportSerializer(data=request.data)
             if serializer.is_valid():
                 serializer.save()
-                return Response(
-                    {"message": "Contact request submitted successfully!"},
-                    status=status.HTTP_201_CREATED
-                )
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"message": "✅ Contact request submitted successfully!"}, status=status.HTTP_201_CREATED)
 
+            # Log error to Slack if validation fails
+            error_message = f"⚠️ ContactSupport API Validation Error: {serializer.errors}"
+            logging.error(error_message)
+            send_slack_error_message(error_message)
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         except Exception as e:
-            error_message = traceback.format_exc()  # Capture full error traceback
-            send_slack_notification(error_message, request)  # Send error to Slack
+            error_traceback = traceback.format_exc()  # Capture full traceback
+            logging.error(f"🚨 Unexpected Error: {error_traceback}")
+            send_slack_error_message(f"🚨 Internal Server Error: {error_traceback}")
+
             return Response(
                 {"error": "An internal server error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    

@@ -1,0 +1,2 @@
+    create slack notify for my api and add this on my middleware if api is not working slack sending message to me.
+     

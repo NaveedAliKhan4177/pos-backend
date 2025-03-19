@@ -139,7 +139,7 @@ from django.conf import settings
 
 class ContactSupport(models.Model):
     full_name = models.CharField(max_length=255)  # Ensuring valid name field
-    email = models.EmailField(unique=True)  # Ensuring unique email
+    email = models.EmailField(unique=False)  # Ensuring unique email
     phone_number = models.CharField(max_length=15,default="")  # New phone number field
     user_message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
