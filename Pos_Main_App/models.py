@@ -5,7 +5,9 @@ import requests
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.conf import settings
-
+from dotenv import load_dotenv
+import os
+import logging
 # Create your models here.
 
 
@@ -148,9 +150,19 @@ class ContactSupport(models.Model):
         return self.full_name  # Returns a meaningful representation
 
 # Signal to send Slack message
+# Load environment variables from .env
+load_dotenv()
+
+# Fetch Slack Webhook URL
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
 @receiver(post_save, sender=ContactSupport)
 def send_slack_notification(sender, instance, created, **kwargs):
-    if created and hasattr(settings, "SLACK_WEBHOOK_URL"):
+    """Send a notification to Slack when a new ContactSupport entry is created."""
+    if created and SLACK_WEBHOOK_URL:
         message = (
             f"🎉 *New Contact Request!*\n"
             f"👤 *Name:* {instance.full_name}\n"
@@ -159,9 +171,12 @@ def send_slack_notification(sender, instance, created, **kwargs):
             f"📝 *Message:* {instance.user_message}"
         )
         payload = {"text": message}
-        
+
         try:
-            response = requests.post(settings.SLACK_WEBHOOK_URL, json=payload)
+            response = requests.post(SLACK_WEBHOOK_URL, json=payload)
             response.raise_for_status()
+            logger.info("✅ Slack notification sent successfully.")
         except requests.exceptions.RequestException as e:
-            print(f"Failed to send Slack notification: {e}")
+            logger.error(f"❌ Failed to send Slack notification: {e}")
+    elif not SLACK_WEBHOOK_URL:
+        logger.warning("⚠️ SLACK_WEBHOOK_URL is not set! Check your .env file.")

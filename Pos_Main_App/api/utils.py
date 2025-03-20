@@ -1,27 +1,25 @@
-import requests
-import json
-import traceback
+import os
 import logging
-from django.conf import settings
+import requests
+
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
 def send_slack_error_message(error_message):
-    """Send formatted error logs to Slack via Webhook."""
-    webhook_url = getattr(settings, "SLACK_WEBHOOK_URL", None)
-    
-    if not webhook_url:
-        logging.warning("⚠️ Slack Webhook URL is not set in settings. Skipping Slack notification.")
-        return  # Skip if the webhook URL is not set
+    """Send properly formatted error messages to Slack."""
+    if not SLACK_WEBHOOK_URL:
+        logging.warning("⚠️ Slack Webhook URL is not set. Skipping notification.")
+        return
 
-    slack_data = {"text": f"🚨 *ERROR ALERT* 🚨\n```{error_message}```"}
-    
+    # Slack has a 4000-character limit; we truncate at 3900 to be safe
+    max_length = 3900  
+    truncated_error = (error_message[:max_length] + '...') if len(error_message) > max_length else error_message
+
+    payload = {
+        "text": ":rotating_light: *ERROR ALERT* :rotating_light:\n```" + truncated_error + "```"
+    }
+
     try:
-        response = requests.post(
-            webhook_url, 
-            data=json.dumps(slack_data), 
-            headers={"Content-Type": "application/json"}
-        )
-
-        if response.status_code != 200:
-            logging.error(f"❌ Slack notification failed: {response.text}")
-    except Exception as e:
-        logging.error(f"❌ Failed to send Slack message: {traceback.format_exc()}")
+        response = requests.post(SLACK_WEBHOOK_URL, json=payload, headers={"Content-Type": "application/json"})
+        response.raise_for_status()  # Raise an error if request fails
+    except requests.exceptions.RequestException as e:
+        logging.error(f"❌ Failed to send Slack notification: {e}")

@@ -31,8 +31,31 @@ ALLOWED_HOSTS = ['*',"http://3.108.54.86",'localhost',"http://3.108.185.44:5173/
 
 # settings.py
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+# Convert BASE_DIR to a Path object
+BASE_DIR = Path(__file__).resolve().parent.parent  # Correct way
+
+# Load .env file explicitly
+dotenv_path = BASE_DIR / ".env"  # Use Path operations
+load_dotenv(dotenv_path=dotenv_path)
+
+# Now fetch the Slack webhook URL
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+
+if not SLACK_WEBHOOK_URL:
+    print("⚠️ SLACK_WEBHOOK_URL is not set! Check your .env file.")
+
+# Fix database path
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',  # Now this will work correctly
+    }
+}
+
+
 
 
 INSTALLED_APPS = [
