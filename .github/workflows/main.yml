@@ -1,53 +1,50 @@
-name: Deploy React Frontend to EC2
+name: Deploy Django Backend to EC2
 
 on:
   push:
     branches:
-      - ameen_work  # or your branch
+      - ameen_work  # or your branch name
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-
-    - name: Install dependencies
-      run: npm install
-
-    - name: Build React app
-      run: npm run build
-
-    - name: Compress build folder
+    - name: Compress Django project (exclude Git and CI files)
       run: |
-        tar -czf pos-frontend.tar.gz -C dist .
+        tar --exclude='.git' --exclude='.github' -czf pos-backend.tar.gz .
 
-    - name: Copy tar to EC2 instance
+    - name: Upload to EC2 via SCP
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: "pos-frontend.tar.gz"
+        source: "pos-backend.tar.gz"
         target: "/home/${{ secrets.EC2_USER }}/"
 
-    - name: SSH into EC2 and deploy
+    - name: Connect & Deploy on EC2
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          cd ~
-          rm -rf frontend
-          mkdir frontend
-          tar -xzf pos-frontend.tar.gz -C frontend
-          rm pos-frontend.tar.gz
-          echo "Frontend extracted to ~/frontend"
+          # Clean up old build
+          rm -rf ~/pos-backend
+          mkdir ~/pos-backend
+          mv ~/pos-backend.tar.gz ~/pos-backend/
+          cd ~/pos-backend
 
+          # Extract code
+          tar -xzf pos-backend.tar.gz
+          rm pos-backend.tar.gz
+
+          # Build and run Docker container
+          docker stop pos-backend || true
+          docker rm pos-backend || true
+          docker build -t pos-backend .
+          docker run -d --name pos-backend -p 8000:8000 pos-backend
