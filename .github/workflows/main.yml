@@ -1,52 +1,55 @@
-name: Deploy Backend to AWS ECS
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
-      - Staging  # Runs when backend repo is updated
+      - ameen_work
+
+env:
+  DOCKER_IMAGE: pos-backend:latest
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION: "ap-south-1"
-      ECS_CLUSTER: "staging-cluster"
-      ECS_SERVICE_BACKEND: "pos-backend"
 
     steps:
-      # 1️⃣ Checkout the Repository
-      - name: Checkout repository
-        uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      # 2️⃣ Clone `pos-backend` Repository
-      - name: Clone pos-backend Repository
-        run: |
-          git clone https://github.com/POS-Developers/pos-backend.git
-          ls -l pos-backend  # Debug to confirm folder exists
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.10
 
-      # 3️⃣ Login to Docker Hub
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+    - name: Build Docker image
+      run: |
+        docker build -t $DOCKER_IMAGE .
 
-      # 4️⃣ Build & Push Backend Image
-      - name: Build and Push Backend Image
-        run: |
-          cd pos-backend
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/pos-backend:latest .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/pos-backend:latest
+    - name: Save Docker image as tarball
+      run: |
+        docker save $DOCKER_IMAGE -o pos-backend.tar
 
-      # 5️⃣ Configure AWS Credentials
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+    # Upload image to EC2 over SSH and deploy
+    - name: Copy Docker image to EC2
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "pos-backend.tar"
+        target: "/home/${{ secrets.EC2_USER }}/"
 
-      # 6️⃣ Force ECS to Pull Latest Backend Image
-      - name: Force ECS Service Update
-        run: |
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_BACKEND --force-new-deployment
+    - name: Deploy on EC2 via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          cd ~
+          docker load -i pos-backend.tar
+          docker stop pos-backend || true
+          docker rm pos-backend || true
+          docker run -d --name pos-backend -p 8000:8000 pos-backend:latest
+
+
