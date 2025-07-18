@@ -1,50 +1,46 @@
-name: Deploy Django Backend to EC2
+name: CI/CD Deploy to EC2
 
 on:
   push:
     branches:
-      - ameen_work  # or your branch name
+      - ameen_work  # Trigger only on pushes to this branch
 
 jobs:
   deploy:
+    name: Build & Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - name: Checkout Code
+      uses: actions/checkout@v3
 
-    - name: Compress Django project (exclude Git and CI files)
+    - name: Set up SSH key
       run: |
-        tar --exclude='.git' --exclude='.github' -czf pos-backend.tar.gz .
+        mkdir -p ~/.ssh
+        echo "${{ secrets.EC2_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-    - name: Upload to EC2 via SCP
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        source: "pos-backend.tar.gz"
-        target: "/home/${{ secrets.EC2_USER }}/"
+    - name: Deploy to EC2
+      run: |
+        ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          # Clone if not exists, or pull latest
+          if [ ! -d "pos-backend" ]; then
+            git clone -b ameen_work https://github.com/${{ github.repository }}.git pos-backend
+          else
+            cd pos-backend
+            git fetch origin
+            git checkout ameen_work
+            git pull origin ameen_work
+          fi
 
-    - name: Connect & Deploy on EC2
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          # Clean up old build
-          rm -rf ~/pos-backend
-          mkdir ~/pos-backend
-          mv ~/pos-backend.tar.gz ~/pos-backend/
-          cd ~/pos-backend
+          cd pos-backend
 
-          # Extract code
-          tar -xzf pos-backend.tar.gz
-          rm pos-backend.tar.gz
-
-          # Build and run Docker container
+          # Stop and remove any old container
           docker stop pos-backend || true
           docker rm pos-backend || true
+
+          # Build and run fresh container
           docker build -t pos-backend .
           docker run -d --name pos-backend -p 8000:8000 pos-backend
+        EOF
