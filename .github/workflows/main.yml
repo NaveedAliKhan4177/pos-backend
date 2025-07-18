@@ -3,7 +3,7 @@ name: CI/CD Deploy to EC2
 on:
   push:
     branches:
-      - ameen_work
+      - ameen_work  # Trigger only on pushes to this branch
 
 jobs:
   deploy:
@@ -24,23 +24,23 @@ jobs:
     - name: Deploy to EC2
       run: |
         ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          # Clone the branch or pull latest
+          # Clone if not exists, or pull latest
           if [ ! -d "pos-backend" ]; then
-            git clone -b ${{ secrets.BRANCH }} https://github.com/${{ github.repository }}.git pos-backend
+            git clone -b ameen_work https://github.com/${{ github.repository }}.git pos-backend
           else
             cd pos-backend
             git fetch origin
-            git checkout ${{ secrets.BRANCH }}
-            git pull origin ${{ secrets.BRANCH }}
+            git checkout ameen_work
+            git pull origin ameen_work
           fi
 
           cd pos-backend
 
-          # Stop existing container
+          # Stop and remove any old container
           docker stop pos-backend || true
           docker rm pos-backend || true
 
-          # Build and run
+          # Build and run fresh container
           docker build -t pos-backend .
           docker run -d --name pos-backend -p 8000:8000 pos-backend
         EOF
