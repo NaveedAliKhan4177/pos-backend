@@ -1,46 +1,35 @@
-name: CI/CD Deploy to EC2
+name: Build & Deploy to EC2
 
 on:
   push:
     branches:
-      - ameen_work  # Trigger only on pushes to this branch
+      - main
 
 jobs:
   deploy:
-    name: Build & Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Set up SSH key
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.EC2_KEY }}" > ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
-    - name: Deploy to EC2
-      run: |
-        ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          # Clone if not exists, or pull latest
-          if [ ! -d "pos-backend" ]; then
-            git clone -b ameen_work https://github.com/${{ github.repository }}.git pos-backend
-          else
-            cd pos-backend
-            git fetch origin
-            git checkout ameen_work
-            git pull origin ameen_work
-          fi
+      - name: Add EC2 server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H 43.204.216.117 >> ~/.ssh/known_hosts
 
-          cd pos-backend
-
-          # Stop and remove any old container
-          docker stop pos-backend || true
-          docker rm pos-backend || true
-
-          # Build and run fresh container
-          docker build -t pos-backend .
-          docker run -d --name pos-backend -p 8000:8000 pos-backend
-        EOF
+      - name: Deploy to EC2
+        run: |
+          ssh ubuntu@43.204.216.117 << 'EOF'
+            cd ~/pos-backend
+            git pull origin main
+            docker build -t pos-backend .
+            docker stop pos-backend || true
+            docker rm pos-backend || true
+            docker run -d --name pos-backend -p 8000:8000 pos-backend
+          EOF
